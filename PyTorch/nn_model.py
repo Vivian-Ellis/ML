@@ -3,10 +3,10 @@
 import torch
 import torch.nn as nn
 
-class MultiOutputModel(nn.Module):
+class BinaryClassification(nn.Module):
     '''pytorch model with linear layers and a sigmoid activation function for binary awarness questions and a softmax function of likert scale questions'''
     def __init__(self, input_size, hidden_size, output_size):
-        super(MultiOutputModel, self).__init__()
+        super(BinaryClassification, self).__init__()
         #note the layers are specified as linear because the model will perform a linear transformation of the input data. The linear transformation allows the model to perform matrix multiplication to deterimine the weight and bias. The weight is the pattern being picked up in the 2nd layer and the bias is how high weighted sum needs to be before going through the activation function.
         self.input_layer = nn.Linear(input_size, hidden_size) # this is the first layer of the NN, the number of features = input size
         self.hidden_layer = nn.Linear(hidden_size, hidden_size) # layers between the input and output layer that process the data by applying complex non-linear functions. The hidden layers could consist of one or more
