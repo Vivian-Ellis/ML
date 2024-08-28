@@ -11,7 +11,6 @@ class BinaryClassification(nn.Module):
         self.input_layer = nn.Linear(input_size, hidden_size) # this is the first layer of the NN, the number of features = input size
         self.hidden_layer = nn.Linear(hidden_size, hidden_size) # layers between the input and output layer that process the data by applying complex non-linear functions. The hidden layers could consist of one or more
         
-        # two output options, one for binary awareness questions and another for ordinal questions
         self.output_layer = nn.Linear(hidden_size, 1) # the last layer has the number of specified outputs (questions), each with an activation (between 0 and 1). The last layer is the predicitons
 
         # activation functions
