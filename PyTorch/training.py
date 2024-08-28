@@ -1,13 +1,14 @@
-import pandas as pd
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 import nn_model as BC
 import torch
 import torch.nn as nn
-import numpy as np
+
 import torch.optim as optim
-import torch.nn.functional as F
+import copy
+
 from sklearn.model_selection import train_test_split
 
 class modelTrain():
@@ -30,9 +31,9 @@ class modelTrain():
         x_test = torch.Tensor(x_test)
         x_validation = torch.Tensor(x_validation)
 
-        y_train = torch.Tensor(y_train)
-        y_test = torch.Tensor(y_test)
-        y_validation = torch.Tensor(y_validation)
+        y_train = torch.Tensor(y_train).unsqueeze(1)
+        y_test = torch.Tensor(y_test).unsqueeze(1)
+        y_validation = torch.Tensor(y_validation).unsqueeze(1)
 
         data_splits = {
             'x_train': x_train,
@@ -45,21 +46,24 @@ class modelTrain():
         
         return data_splits
 
-    def model_train(data_splits,steps=5000,learning_rate=1e-4,hidden_size=14,output_size=1,opt='adam',verbose=True):
+    def model_train(data_splits,steps=5000,learning_rate=1e-4,weight_decay=0,hidden_size=14,opt='adam',patience=20,verbose=True):
         num_features = data_splits['x_train'].size(1)
-        deep_model = BC.BinaryClassification(input_size=num_features, hidden_size=hidden_size, output_size=output_size)
+        deep_model = BC.BinaryClassification(input_size=num_features, hidden_size=hidden_size)
 
         # for binary awarness questions use the Binary Cross Entropy loss function to optimize model by adjusting weights during model training
         criterion = nn.BCELoss()
 
-        optimizers={'adam':optim.Adam(deep_model.parameters(), lr=learning_rate),
-                    'sgd':optim.SGD(deep_model.parameters(), lr=learning_rate)
+        optimizers={'adam':optim.Adam(deep_model.parameters(), lr=learning_rate,weight_decay=weight_decay),
+                    'sgd':optim.SGD(deep_model.parameters(), lr=learning_rate,weight_decay=weight_decay)
                     }
         
         optimizer = optimizers.get(opt)
 
         losses=[]
         validation_losses=[]
+        loss_steps=[]
+
+        best_loss=float('inf')
 
         # training model
         for step in range(steps):
@@ -78,26 +82,39 @@ class modelTrain():
             #adjust learning weights
             optimizer.step()
 
-            losses.append(loss.item())
-
             # eval mode
             deep_model.eval()
             with torch.no_grad(): #pause gradient calc during validation
                 val_output = deep_model(data_splits['x_validation'])
-
                 val_loss = criterion(val_output, data_splits['y_validation'])
-                validation_losses.append(val_loss.item())
-                
+                                
                 if verbose:
                     if (step + 1) % 100 == 0:
+                        loss_steps.append(step)
+                        losses.append(loss.item())
+                        validation_losses.append(val_loss.item())
                         # loss and accuracy
                         val_y_pred = val_output.squeeze().round().long()
                         validation_accuracy= (val_y_pred == data_splits['y_validation']).float().mean()
-                        print(f"step [{step+1}/{steps}],training loss: {round(loss.item(), 4)}, validation loss: {validation_losses}, validation accuracy: {validation_accuracy}")
+                        print(f"step [{step+1}/{steps}],training loss: {round(loss.item(), 4)}, validation loss: {round(val_loss.item(),4)}, validation accuracy: {round(validation_accuracy.item(),4)}")
+
+            # early stopping
+            if val_loss < best_loss:
+                best_loss = val_loss
+                best_model_weights = copy.deepcopy(deep_model.state_dict())  # Deep copy here      
+                patience = patience  # Reset patience counter
+            else:
+                patience -= 1
+                if patience == 0:
+                    print('EARLY STOPPING...')
+                    break
+                        
+        # Load the best model weights
+        deep_model.load_state_dict(best_model_weights)
 
         losses={'train':losses,
                 'validation':validation_losses,
-                'steps':steps}
+                'steps':loss_steps}
         
         return deep_model,criterion,losses
 
@@ -113,12 +130,11 @@ class modelTrain():
 
         print(f"Total Test Loss: {round(test_loss.item(),4)}")
         print(f'Accuracy of the network: {100 * test_accuracy} %')
-
+        return test_y_pred
     def plot_learning_curve(losses):
         fig, axes = plt.subplots(figsize=(15,5))
         fig.suptitle('Learning Curve')
 
-        x_steps=np.arange(0,losses['steps'],1)
-        sns.lineplot(x=x_steps, y=losses['train'],ax=axes[0],label='train')
-        sns.lineplot(x=x_steps, y=losses['validation'],ax=axes[0],label='validation')
+        sns.lineplot(x=losses['steps'], y=losses['train'],ax=axes,label='train')
+        sns.lineplot(x=losses['steps'], y=losses['validation'],ax=axes,label='validation')
         plt.show()
